@@ -1,0 +1,51 @@
+{
+  "name": "payroll-sdet-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Mini payroll backend (REST + GraphQL over SQLite) built as an SDET testbed: API testing, contract validation, SQL data integrity checks, load testing and CI.",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "typecheck": "tsc -p . --noEmit",
+    "typecheck:tests": "tsc -p tsconfig.tests.json",
+    "start": "node dist/index.js",
+    "dev": "npm run build && node dist/index.js",
+    "db:reset": "npm run build && node dist/db/reset.js",
+    "test": "playwright test",
+    "test:api": "playwright test tests/api",
+    "test:graphql": "playwright test tests/graphql",
+    "test:contract": "playwright test tests/contract",
+    "test:sql": "playwright test tests/sql",
+    "report": "playwright show-report"
+  },
+  "keywords": [
+    "sdet",
+    "qa",
+    "api-testing",
+    "graphql",
+    "contract-testing",
+    "sql",
+    "playwright",
+    "k6"
+  ],
+  "author": "Jeronimo Londono Cardenas",
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^12.2.0",
+    "express": "^5.1.0",
+    "graphql": "^16.9.0",
+    "graphql-yoga": "^5.7.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.0",
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/express": "^5.0.0",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}
