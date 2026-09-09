@@ -46,11 +46,6 @@ GitHub Actions.
 
 ## Running it
 
-> Built and tested with Claude Code / AI-assisted tooling. This project was
-> written in a sandboxed environment without npm registry access, so
-> dependencies were **not** installed or executed there — install and run
-> them locally before relying on this repo in an interview.
-
 ```bash
 npm install
 npm test              # full suite: API + GraphQL + contract + SQL
@@ -60,6 +55,30 @@ npm run test:contract # just contract/schema checks
 npm run test:sql      # just SQL integrity checks
 npm run dev           # run the server standalone (REST :4000, GraphQL :4000/graphql)
 ```
+
+Requires Node >= 22 (see `engines` in `package.json`); CI runs the same version.
+
+### Why the tests use a file-backed database
+
+The suite runs against a file-backed SQLite database (`test.db`, gitignored),
+not `:memory:`. This is deliberate and worth knowing about:
+
+- An in-memory SQLite database **belongs to the connection that opened it**.
+- Playwright runs `globalSetup` — which boots the REST/GraphQL server and seeds
+  the data — in the main process, but runs spec files in **separate worker
+  processes**.
+- The API and GraphQL specs talk to the server over HTTP, so they see the seeded
+  data. The SQL specs import the `db` handle directly, so in a worker they would
+  open their own, empty in-memory database and fail with `no such table`.
+
+`playwright.config.ts` therefore sets `DB_FILE` before anything imports `src/db`,
+so every process opens the same database, and `globalSetup` calls `resetDb()`
+(drop, migrate, seed) so each run starts from a known schema and dataset.
+
+`workers: 1` is set because the specs share one mutable database — several of
+them write to `payroll_runs`. This is a documented trade-off, not test
+isolation: the more robust fix is for each spec to own its data. At a 1.2s
+suite the serial run costs nothing, so the trade-off is taken knowingly.
 
 ## Structure
 ```
@@ -77,6 +96,8 @@ sql/             Standalone reference queries
 ```
 
 ## Honest next steps
+- Give each spec its own data instead of relying on `workers: 1`, so the suite
+  can run in parallel.
 - Swap the schema-validation contract tests for real Pact consumer-driven
   contracts if a front-end/mobile consumer needs to be kept in sync.
 - Add a mobile client (Detox/Maestro) hitting the same API to extend this

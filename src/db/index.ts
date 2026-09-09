@@ -6,9 +6,14 @@ import type { Database as DatabaseType } from 'better-sqlite3';
  *
  * WHY A SINGLE MODULE-LEVEL CONNECTION
  * The default target is ':memory:', and an in-memory SQLite database belongs to the connection
- * that opened it. A second connection would open a different, empty database. The whole test
- * architecture depends on this: tests/global-setup.ts boots REST and GraphQL inside the same
- * process as the suite, so the API layer, the resolvers and tests/sql all read the same rows.
+ * that opened it: a second connection would open a different, empty database. Inside one process
+ * the REST handlers, the GraphQL resolvers and any direct SQL therefore have to share this handle.
+ *
+ * WHY THE TEST SUITE SETS DB_FILE
+ * Playwright runs tests/global-setup.ts (and the server it boots) in its main process and every
+ * spec in a worker process. A worker that imports this module gets its own connection, so with
+ * ':memory:' tests/sql would see an empty database. playwright.config.ts points DB_FILE at a
+ * file on disk so that every process reads the same rows.
  *
  * WHY better-sqlite3 AND NOT AN ASYNC DRIVER
  * Its API is synchronous, so a query cannot be left un-awaited. In a test suite that removes a
