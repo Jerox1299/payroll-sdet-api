@@ -1,12 +1,16 @@
 import { test, expect } from '@playwright/test';
+import { createEmployee, uniqueEmail } from '../helpers/test-data';
 
 test.describe('REST — /employees', () => {
-  test('GET /employees returns seeded employees', async ({ request }) => {
+  test('GET /employees lists an employee created through the API', async ({ request }) => {
+    const created = await createEmployee(request);
+
     const res = await request.get('/employees');
     expect(res.status()).toBe(200);
     const body = await res.json();
     expect(Array.isArray(body)).toBeTruthy();
-    expect(body.length).toBeGreaterThanOrEqual(2);
+    const found = body.find((employee: { id: number }) => employee.id === created.id);
+    expect(found).toEqual(created);
   });
 
   test('GET /employees/:id returns 404 for unknown id', async ({ request }) => {
@@ -16,7 +20,7 @@ test.describe('REST — /employees', () => {
 
   test('POST /employees creates an employee (201)', async ({ request }) => {
     const res = await request.post('/employees', {
-      data: { full_name: 'Test User', email: `test.${Date.now()}@example.com`, hourly_rate: 30 },
+      data: { full_name: 'Test User', email: uniqueEmail(), hourly_rate: 30 },
     });
     expect(res.status()).toBe(201);
     const body = await res.json();
@@ -30,14 +34,10 @@ test.describe('REST — /employees', () => {
   });
 
   test('POST /employees rejects duplicate email (409)', async ({ request }) => {
-    const email = `dup.${Date.now()}@example.com`;
-    const first = await request.post('/employees', {
-      data: { full_name: 'First', email, hourly_rate: 20 },
-    });
-    expect(first.status()).toBe(201);
+    const existing = await createEmployee(request);
 
     const second = await request.post('/employees', {
-      data: { full_name: 'Second', email, hourly_rate: 22 },
+      data: { full_name: 'Second', email: existing.email, hourly_rate: 22 },
     });
     expect(second.status()).toBe(409);
   });

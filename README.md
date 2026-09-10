@@ -26,8 +26,9 @@ precise, testable scenarios. See `src/domain/payroll.ts` and
 `tests/api/payroll.spec.ts`.
 
 ## What's covered
-- **REST API** (`tests/api`): CRUD-style endpoints, positive and negative
-  cases (400/404/409), and the payroll business rule end-to-end.
+- **REST API** (`tests/api`): employees, timesheets and payroll runs, with
+  positive and negative cases (400/404/409) and the payroll business rule
+  end-to-end, including the exact 40h boundary.
 - **GraphQL** (`tests/graphql`): queries over the same data, including how
   GraphQL surfaces "not found" (`null`) vs errors, which differs from REST.
 - **Contract testing** (`tests/contract`): response shape validated against
@@ -67,27 +68,35 @@ not `:memory:`. This is deliberate and worth knowing about:
 - Playwright runs `globalSetup` — which boots the REST/GraphQL server and seeds
   the data — in the main process, but runs spec files in **separate worker
   processes**.
-- The API and GraphQL specs talk to the server over HTTP, so they see the seeded
-  data. The SQL specs import the `db` handle directly, so in a worker they would
-  open their own, empty in-memory database and fail with `no such table`.
+- The API, GraphQL and contract specs talk to the server over HTTP only and
+  never import `src/db`. The SQL specs import the `db` handle directly, so in a
+  worker they would open their own, empty in-memory database and fail with
+  `no such table`.
 
 `playwright.config.ts` therefore sets `DB_FILE` before anything imports `src/db`,
 so every process opens the same database, and `globalSetup` calls `resetDb()`
 (drop, migrate, seed) so each run starts from a known schema and dataset.
 
-`workers: 1` is set because the specs share one mutable database — several of
-them write to `payroll_runs`. This is a documented trade-off, not test
-isolation: the more robust fix is for each spec to own its data. At a 1.2s
-suite the serial run costs nothing, so the trade-off is taken knowingly.
+### Why the suite runs fully parallel
+
+Every test creates the rows it asserts on through the public API, using the
+single helper in `tests/helpers/test-data.ts` (`POST /employees`,
+`POST /timesheets`), and never reads anything another test wrote. Emails are
+unique per call (`randomUUID()`), so retries and repeats cannot collide either.
+The server process is therefore the only writer of SQLite, and
+`playwright.config.ts` sets `fullyParallel: true` with no `workers` cap.
+Checked by running the suite five times in a row, with `--repeat-each=3` and
+with `--workers=4`: green every time.
 
 ## Structure
 ```
 src/
   db/            SQLite schema, migration, seed data
-  domain/        Payroll business rule (framework-agnostic, unit-testable)
+  domain/        Payroll business rule + calendar constants (no side effects)
   rest/          Express REST endpoints
   graphql/       GraphQL schema + resolvers (same domain as REST)
 tests/
+  helpers/       The one module that creates test data, over HTTP
   api/           REST tests (positive/negative/business rule)
   graphql/       GraphQL tests
   contract/      Schema/contract validation
@@ -96,8 +105,12 @@ sql/             Standalone reference queries
 ```
 
 ## Honest next steps
-- Give each spec its own data instead of relying on `workers: 1`, so the suite
-  can run in parallel.
+- Make the two SQL integrity checks falsifiable. `no orphaned timesheets` and
+  `no duplicate timesheets` cannot fail today: the foreign key with
+  `ON DELETE CASCADE` and the `UNIQUE (employee_id, week_start)` constraint
+  make the rows they look for impossible to create, and both pass on an empty
+  table. They should attempt the violating insert and expect the constraint
+  error, or at least assert the table is not empty first.
 - Swap the schema-validation contract tests for real Pact consumer-driven
   contracts if a front-end/mobile consumer needs to be kept in sync.
 - Add a mobile client (Detox/Maestro) hitting the same API to extend this

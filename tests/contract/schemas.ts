@@ -19,3 +19,13 @@ export const PayrollRunSchema = z.object({
   overtimeHours: z.number(),
   grossPay: z.number(),
 });
+
+// Consumer-side contract for the /timesheets response: the stored row, in
+// snake_case like /employees. hours_worked mirrors the CHECK constraint in the
+// schema, week_start the YYYY-MM-DD shape the endpoint validates.
+export const TimesheetSchema = z.object({
+  id: z.number(),
+  employee_id: z.number(),
+  week_start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  hours_worked: z.number().nonnegative(),
+});

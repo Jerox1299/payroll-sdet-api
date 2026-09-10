@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import type { Database as DatabaseType } from 'better-sqlite3';
+import { SEED_PREVIOUS_WEEK_START, SEED_WEEK_START } from '../domain/calendar';
 
 /**
  * SQLite access layer.
@@ -15,6 +16,11 @@ import type { Database as DatabaseType } from 'better-sqlite3';
  * ':memory:' tests/sql would see an empty database. playwright.config.ts points DB_FILE at a
  * file on disk so that every process reads the same rows.
  *
+ * Only tests/global-setup.ts and tests/sql import this module. The seed constants live in
+ * src/domain/calendar.ts precisely so that no other spec has to: importing this file opens a
+ * connection and runs the pragmas, and the API, GraphQL and contract specs are meant to be pure
+ * HTTP clients with the server process as the only SQLite writer.
+ *
  * WHY better-sqlite3 AND NOT AN ASYNC DRIVER
  * Its API is synchronous, so a query cannot be left un-awaited. In a test suite that removes a
  * whole class of tests that pass without having asserted anything.
@@ -22,12 +28,6 @@ import type { Database as DatabaseType } from 'better-sqlite3';
 
 /** Set DB_FILE to persist to disk (e.g. DB_FILE=payroll.db) and inspect it with the sqlite3 CLI. */
 const DB_FILE = process.env.DB_FILE ?? ':memory:';
-
-/** The week every fixture, spec and validation query is built around. */
-export const SEED_WEEK_START = '2026-08-24';
-
-/** The preceding week, seeded only for employee 1, so a query can aggregate across periods. */
-export const SEED_PREVIOUS_WEEK_START = '2026-08-17';
 
 export const db: DatabaseType = new Database(DB_FILE);
 
@@ -88,11 +88,19 @@ interface SeedEmployee {
 }
 
 /**
- * The dataset is not decorative: every row exists to make a specific test case reachable, and the
+ * The dataset is not decorative: every row exists to make a specific scenario reachable, and the
  * comment says which. A fixture whose purpose nobody can name is a fixture the next person deletes.
  *
- * Employees 1 and 2 are frozen. tests/api/payroll.spec.ts and tests/graphql/employees.spec.ts
- * assert against those ids, names and rates by hand.
+ * WHO DEPENDS ON THESE ROWS
+ * No spec under tests/ does any more. Every spec arranges its own employee and timesheet over HTTP
+ * through tests/helpers/test-data.ts, so nothing in the suite asserts against the ids, names or
+ * rates below. Before that isolation, tests/api/payroll, tests/contract, tests/graphql and
+ * tests/sql all hard-coded employees 1 and 2, not only the two files an earlier version of this
+ * comment named.
+ *
+ * DO NOT DELETE THE SEED
+ * performance/k6-load-test.js posts payroll runs for employee 2 in SEED_WEEK_START, and
+ * `npm run dev` boots the standalone server with exactly this data. Remove the seed and both break.
  */
 const SEED_EMPLOYEES: readonly SeedEmployee[] = [
   // Overtime case: 45 h at 20.00 => 40 regular + 5 overtime => 950.00 gross.
@@ -100,8 +108,8 @@ const SEED_EMPLOYEES: readonly SeedEmployee[] = [
   // Under-threshold case: 38 h at 25.00 => no overtime => 950.00 gross. Also the employee the k6
   // profile writes against.
   { id: 2, fullName: 'Luis Gomez', email: 'luis.gomez@example.com', hourlyRate: 25.0, active: 1 },
-  // Exact boundary: 40 h at 18.50 => 740.00 and zero overtime. Off-by-one bugs in the threshold
-  // surface here and nowhere else.
+  // Exact boundary: 40 h at 18.50 => 740.00 and zero overtime. tests/api/payroll.spec.ts covers the
+  // same boundary with rows of its own; this copy keeps it inspectable in a dev database.
   { id: 3, fullName: 'Carla Mendez', email: 'carla.mendez@example.com', hourlyRate: 18.5, active: 1 },
   // Inactive employee who still has hours: forces "should a deactivated worker be paid" to be an
   // explicit decision rather than an accident of the query.
