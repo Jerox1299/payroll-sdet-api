@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import type { Database as DatabaseType } from 'better-sqlite3';
+import { SEED_PREVIOUS_WEEK_START, SEED_WEEK_START } from '../domain/calendar';
 
 /**
  * SQLite access layer.
@@ -22,12 +23,6 @@ import type { Database as DatabaseType } from 'better-sqlite3';
 
 /** Set DB_FILE to persist to disk (e.g. DB_FILE=payroll.db) and inspect it with the sqlite3 CLI. */
 const DB_FILE = process.env.DB_FILE ?? ':memory:';
-
-/** The week every fixture, spec and validation query is built around. */
-export const SEED_WEEK_START = '2026-08-24';
-
-/** The preceding week, seeded only for employee 1, so a query can aggregate across periods. */
-export const SEED_PREVIOUS_WEEK_START = '2026-08-17';
 
 export const db: DatabaseType = new Database(DB_FILE);
 

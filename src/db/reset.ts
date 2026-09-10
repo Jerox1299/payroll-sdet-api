@@ -1,4 +1,5 @@
-import { closeDb, db, resetDb, SEED_WEEK_START } from './index';
+import { closeDb, db, resetDb } from './index';
+import { SEED_WEEK_START } from '../domain/calendar';
 
 /**
  * Standalone entry point behind `npm run db:reset`.

@@ -40,6 +40,40 @@ export function buildRestApp() {
     }
   });
 
+  // POST /timesheets — hours for one employee and one week, the input every payroll run is
+  // computed from. Same shape as the other writers: 400 on bad input, 404 on a missing parent,
+  // 409 when the UNIQUE (employee_id, week_start) constraint fires.
+  app.post('/timesheets', (req: Request, res: Response) => {
+    const { employee_id, week_start, hours_worked } = req.body ?? {};
+    if (
+      typeof employee_id !== 'number' ||
+      typeof week_start !== 'string' ||
+      !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(week_start) ||
+      typeof hours_worked !== 'number' ||
+      !Number.isFinite(hours_worked) ||
+      hours_worked < 0
+    ) {
+      return res.status(400).json({
+        error: 'employee_id, week_start (YYYY-MM-DD) and a non-negative hours_worked are required',
+      });
+    }
+
+    const employee = db.prepare('SELECT id FROM employees WHERE id = ?').get(employee_id);
+    if (!employee) return res.status(404).json({ error: 'Employee not found' });
+
+    try {
+      const result = db
+        .prepare('INSERT INTO timesheets (employee_id, week_start, hours_worked) VALUES (?, ?, ?)')
+        .run(employee_id, week_start, hours_worked);
+      res.status(201).json({ id: result.lastInsertRowid, employee_id, week_start, hours_worked });
+    } catch (err: any) {
+      if (String(err.message).includes('UNIQUE')) {
+        return res.status(409).json({ error: 'timesheet already exists for that employee and week' });
+      }
+      res.status(500).json({ error: 'internal error' });
+    }
+  });
+
   // POST /payroll-runs — the interesting business-logic endpoint
   app.post('/payroll-runs', (req: Request, res: Response) => {
     const { employee_id, week_start } = req.body ?? {};
